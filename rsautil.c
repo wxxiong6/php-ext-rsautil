@@ -242,7 +242,7 @@ PHP_METHOD(rsautil, encrypt)
 		php_error_docref(NULL, E_WARNING, "Failed to pulbicKey ");
 		RETURN_FALSE;
 	}
-	zval_dtor(&rv);
+
 
 
 	zval   callback_params[4];
