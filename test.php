@@ -58,10 +58,10 @@ var_dump($rsa->setPkcs12($pri, "12345678"));
 // var_dump("getPkcs12", $rsa->getPkcs12());
 
 
-$encryptedTemp = $rsa->encrypt("A");
+$encryptedTemp = $rsa->encrypt("abckeddd");
 var_dump("encrypted", $encryptedTemp);
 $decryptedTemp = $rsa->decrypt($encryptedTemp);
 var_dump("decrypted",$decryptedTemp);
 
 
-var_dump("split", $rsa->split("adc", 1));
+// var_dump("split", $rsa->split("adc", 1));

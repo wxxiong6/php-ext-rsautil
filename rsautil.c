@@ -132,10 +132,6 @@ static zval rsautil_str_split(zend_string *str, zend_long split_length)
 	{
 		// return NULL;
 	}
-
-	// php_var_dump( &retval, 1);
-	// zval_dtor(&retval);
-
 	return retval;
 }
 
@@ -148,50 +144,38 @@ PHP_METHOD(rsautil, split)
 	Z_PARAM_LONG(split_length)
 	ZEND_PARSE_PARAMETERS_END();
 	zval arr = rsautil_str_split(data, split_length);
-	php_var_dump(&arr, 1);
-
-
-
+	// php_var_dump(&arr, 1);
 
 	HashTable *ht = Z_ARRVAL(arr);
-	php_printf("array_size=%d, element=%d \n ", zend_array_count(ht), zend_hash_num_elements(ht));
-	
-	
-	zval *result;
+	// php_printf("array_size=%d, element=%d \n ", zend_array_count(ht), zend_hash_num_elements(ht));
+
 	zval *pulbicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 TSRMLS_DC, NULL);
 	if (!pulbicKey)
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to pulbicKey ");
 		RETURN_FALSE;
 	}
-		result = ecalloc(zend_hash_num_elements(ht), sizeof(zval));
-		array_init_size(result, zend_hash_num_elements(ht));
-		// array_init(result);
-					zval *val;
-					zval *tmp;
-					ZEND_HASH_FOREACH_VAL(ht, val) {
-						ZVAL_DEREF(val);
-						ZVAL_DEREF(tmp);
+	
+		zend_string *str = NULL;
+        uint32_t numelems = zend_hash_num_elements(ht);
+		uint32_t len = 128;
+		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
+		ZSTR_LEN(str) = 0;
+		zval *val;
+		zval *tmp;
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			ZVAL_DEREF(val);
+			ZVAL_DEREF(tmp);
 
-						tmp = rsautil_encrypt(Z_STR_P(val), 1, pulbicKey);
-						if (tmp && Z_STRLEN_P(tmp) > 0) {
-							add_next_index_string(result, Z_STRVAL_P(tmp));
-							// zend_hash_next_index_insert(Z_ARRVAL_P(result), tmp);
-						}
-		
-						// concat();
-						// php_printf("str=:%s\n", baseUri);
-						// php_var_dump(tmp, 1);			
-						
-						
-					} ZEND_HASH_FOREACH_END();
-// php_var_dump(result, 1);	
+			tmp = rsautil_encrypt(Z_STR_P(val), 1, pulbicKey);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+				ZSTR_LEN(str) += len;
+			}
+		} ZEND_HASH_FOREACH_END();
 
-			php_printf("str=%s, strlen=%d", php_implode(result), strlen(php_implode(result)));
-				
-		
-		
-	// rsautil_str_split(data, split_length);
+	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
+	RETURN_NEW_STR(str);
 }
 
 //获取属性方法
@@ -309,6 +293,30 @@ PHP_METHOD(rsautil, getPkcs12)
 	rsautil_get_property(ZEND_STRL(PROPERTY_PKCS12), INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }
 
+static void rsa_concat(){
+	// zval arr = rsautil_str_split(data, split_length);
+	// HashTable *ht = Z_ARRVAL(arr);
+	// zend_string *str = NULL;
+    //     uint32_t numelems = zend_hash_num_elements(ht);
+	// 	uint32_t len = 128;
+	// 	str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
+	// 	ZSTR_LEN(str) = 0;
+	// 	zval *val;
+	// 	zval *tmp;
+	// 	ZEND_HASH_FOREACH_VAL(ht, val) {
+	// 		ZVAL_DEREF(val);
+	// 		ZVAL_DEREF(tmp);
+
+	// 		tmp = rsautil_encrypt(Z_STR_P(val), 1, pulbicKey);
+	// 		if (tmp && Z_STRLEN_P(tmp) > 0) {
+	// 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+	// 			ZSTR_LEN(str) += len;
+	// 		}
+	// 	} ZEND_HASH_FOREACH_END();
+
+	//  ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
+}
+
 PHP_METHOD(rsautil, decrypt)
 {
 	zend_long padding = 1;
@@ -333,10 +341,35 @@ PHP_METHOD(rsautil, decrypt)
 		php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
 		RETURN_FALSE;
 	}
-	zval *decrypt_data = rsautil_decrypt(base64_str, padding, privateKey);
-	if (decrypt_data)
+	// zval *decrypt_data = rsautil_decrypt(base64_str, padding, privateKey);
+
+	zend_long split_length = 128;
+	zval arr = rsautil_str_split(base64_str, split_length);
+	HashTable *ht = Z_ARRVAL(arr);
+	zend_string *str = NULL;
+        uint32_t numelems = zend_hash_num_elements(ht);
+		uint32_t len = 128;
+		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
+		ZSTR_LEN(str) = 0;
+		zval *val;
+		zval *tmp;
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			ZVAL_DEREF(val);
+			ZVAL_DEREF(tmp);
+
+			tmp = rsautil_decrypt(Z_STR_P(val), 1, privateKey);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+				ZSTR_LEN(str) += len;
+			}
+		} ZEND_HASH_FOREACH_END();
+
+	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
+
+
+	if (str)
 	{
-		RETURN_STR(Z_STR_P(decrypt_data));
+		RETURN_NEW_STR(str);
 	}
 	else
 	{
@@ -361,10 +394,34 @@ PHP_METHOD(rsautil, encrypt)
 		php_error_docref(NULL, E_WARNING, "Failed to pulbicKey ");
 		RETURN_FALSE;
 	}
-	zval *encrypt_data = rsautil_encrypt(data, padding, pulbicKey);
-	if (encrypt_data)
+	zend_long split_length = 117;
+	zval arr = rsautil_str_split(data, split_length);
+	HashTable *ht = Z_ARRVAL(arr);
+	zend_string *str = NULL;
+        uint32_t numelems = zend_hash_num_elements(ht);
+		uint32_t len = 128;
+		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
+		ZSTR_LEN(str) = 0;
+		zval *val;
+		zval *tmp;
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			ZVAL_DEREF(val);
+			ZVAL_DEREF(tmp);
+
+			tmp = rsautil_encrypt(Z_STR_P(val), 1, pulbicKey);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+				ZSTR_LEN(str) += len;
+			}
+		} ZEND_HASH_FOREACH_END();
+
+	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
+
+
+
+	if (str)
 	{
-		RETURN_STR(php_base64_encode((unsigned char *)Z_STRVAL_P(encrypt_data), Z_STRLEN_P(encrypt_data)));
+		RETURN_NEW_STR(php_base64_encode((unsigned char *)ZSTR_VAL(str), ZSTR_LEN(str)));
 	}
 	else
 	{
