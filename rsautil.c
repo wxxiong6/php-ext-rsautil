@@ -341,40 +341,47 @@ PHP_METHOD(rsautil, decrypt)
 		php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
 		RETURN_FALSE;
 	}
-	// zval *decrypt_data = rsautil_decrypt(base64_str, padding, privateKey);
+
 
 	zend_long split_length = 128;
 	zval arr = rsautil_str_split(base64_str, split_length);
 	HashTable *ht = Z_ARRVAL(arr);
 	zend_string *str = NULL;
-        uint32_t numelems = zend_hash_num_elements(ht);
-		uint32_t len = 128;
-		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
+    uint32_t numelems = zend_hash_num_elements(ht);
+	zval *val;
+	zval *tmp;
+
+	if (numelems == 0) {
+		RETURN_EMPTY_STRING();
+	} else if (numelems == 1) {
+		/* loop to search the first not undefined element... */
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			tmp = rsautil_decrypt(Z_STR_P(val), 1, privateKey);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				RETURN_STR(zval_get_string(tmp));
+			}
+			
+		} ZEND_HASH_FOREACH_END();
+	}
+
+		uint32_t len = 0;
+		str = zend_string_safe_alloc(numelems - 1, 117, 117 * numelems, 0);
 		ZSTR_LEN(str) = 0;
-		zval *val;
-		zval *tmp;
+		
 		ZEND_HASH_FOREACH_VAL(ht, val) {
 			ZVAL_DEREF(val);
 			ZVAL_DEREF(tmp);
 
-			tmp = rsautil_decrypt(Z_STR_P(val), 1, privateKey);
+			tmp = rsautil_decrypt(Z_STR_P(val), padding, privateKey);
 			if (tmp && Z_STRLEN_P(tmp) > 0) {
 				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
-				ZSTR_LEN(str) += len;
+				ZSTR_LEN(str) += Z_STRLEN_P(tmp);
+				len += Z_STRLEN_P(tmp);
 			}
 		} ZEND_HASH_FOREACH_END();
 
-	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
-
-
-	if (str)
-	{
-		RETURN_NEW_STR(str);
-	}
-	else
-	{
-		RETURN_FALSE;
-	}
+	 ZSTR_VAL(str)[len] = '\0';
+	RETURN_NEW_STR(str);
 }
 
 /* {{{ void rsautil::encrypt()
@@ -399,11 +406,27 @@ PHP_METHOD(rsautil, encrypt)
 	HashTable *ht = Z_ARRVAL(arr);
 	zend_string *str = NULL;
         uint32_t numelems = zend_hash_num_elements(ht);
+
+	zval *val;
+	zval *tmp;
+
+	if (numelems == 0) {
+		RETURN_EMPTY_STRING();
+	} else if (numelems == 1) {
+		/* loop to search the first not undefined element... */
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			tmp = rsautil_encrypt(Z_STR_P(val), padding, pulbicKey);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				RETURN_NEW_STR(php_base64_encode((unsigned char *)Z_STRVAL_P(tmp), Z_STRLEN_P(tmp)));
+			}
+			
+		} ZEND_HASH_FOREACH_END();
+	}
+
 		uint32_t len = 128;
 		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
 		ZSTR_LEN(str) = 0;
-		zval *val;
-		zval *tmp;
+		
 		ZEND_HASH_FOREACH_VAL(ht, val) {
 			ZVAL_DEREF(val);
 			ZVAL_DEREF(tmp);
@@ -416,17 +439,8 @@ PHP_METHOD(rsautil, encrypt)
 		} ZEND_HASH_FOREACH_END();
 
 	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
-
-
-
-	if (str)
-	{
-		RETURN_NEW_STR(php_base64_encode((unsigned char *)ZSTR_VAL(str), ZSTR_LEN(str)));
-	}
-	else
-	{
-		RETURN_FALSE;
-	}
+	
+	RETURN_NEW_STR(php_base64_encode((unsigned char *)ZSTR_VAL(str), ZSTR_LEN(str)));
 }
 /* }}} */
 
@@ -434,28 +448,31 @@ PHP_METHOD(rsautil, encrypt)
  */
 static const zend_module_dep rsautil_deps[] = {
 	ZEND_MOD_REQUIRED("openssl")
-		ZEND_MOD_END};
+	ZEND_MOD_END
+};
 /* }}} */
 
 /* {{{ rsautil_functions[]
  */
 static const zend_function_entry rsautil_functions[] = {
-	PHP_FE_END};
+	PHP_FE_END
+};
 /* }}} */
 
 /* {{{ rsautil_methods[] 扩展类方法
  */
 static const zend_function_entry rsautil_methods[] = {
 	PHP_ME(rsautil, encrypt, arginfo_rsautil_encrypt, ZEND_ACC_PUBLIC)
-		PHP_ME(rsautil, getPublicKey, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
-			PHP_ME(rsautil, setPublicKey, arginfo_rsautil_set_public, ZEND_ACC_PUBLIC)
-				PHP_ME(rsautil, getPrivateKey, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
-					PHP_ME(rsautil, setPrivateKey, arginfo_rsautil_set_private, ZEND_ACC_PUBLIC)
-						PHP_ME(rsautil, setPkcs12, arginfo_rsautil_set_setPkcs12, ZEND_ACC_PUBLIC)
-							PHP_ME(rsautil, getPkcs12, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
-								PHP_ME(rsautil, decrypt, arginfo_rsautil_decrypt, ZEND_ACC_PUBLIC)
-									PHP_ME(rsautil, split, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
-										PHP_FE_END};
+	PHP_ME(rsautil, getPublicKey, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, setPublicKey, arginfo_rsautil_set_public, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, getPrivateKey, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, setPrivateKey, arginfo_rsautil_set_private, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, setPkcs12, arginfo_rsautil_set_setPkcs12, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, getPkcs12, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, decrypt, arginfo_rsautil_decrypt, ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, split, arginfo_rsautil_void, ZEND_ACC_PUBLIC)
+	PHP_FE_END
+};
 /* }}} */
 
 /* {{{ PHP_MINFO_FUNCTION
