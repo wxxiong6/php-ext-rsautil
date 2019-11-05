@@ -1,19 +1,67 @@
 <?php
-$Rsa = new RsaUtil();
+ini_set("memory_limit", '2048M');
+
+$rsa = new RsaUtil();
 $pub = file_get_contents(__DIR__.'/szkingdom_pub.cer');
 $pri = file_get_contents(__DIR__.'/szkingdom_pri.pfx');
-// var_dump($Rsa->getPublicKey($pub));
-// var_dump(openssl_pkey_get_public($pub));
 
-var_dump($Rsa->setPublicKey($pub));
-var_dump($Rsa->setPrivateKey($pri, "12345678"));
-//var_dump($Rsa->getPublicKey());
-// var_dump($Rsa->getPrivateKey());
-//$encryptedTemp = '';
-//var_dump($Rsa->encrypt("ABDC", $encryptedTemp, $Rsa->getPublicKey(), OPENSSL_PKCS1_PADDING));
-// var_dump($Rsa);
-// openssl_public_encrypt("123131233", $encryptedTemp, $Rsa->getPublicKey(), OPENSSL_PKCS1_PADDING);
+var_dump($rsa->setPublicKey($pub));
+var_dump($rsa->setPkcs12($pri, "12345678"));
 
-// openssl_public_encrypt("ABCD", $encryptedTemp, $Rsa->getPublicKey("33"), OPENSSL_PKCS1_PADDING);
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
+// var_dump("getPublicKey", $rsa->getPublicKey());
+// var_dump("getPrivateKey", $rsa->getPrivateKey());
+// var_dump("getPkcs12", $rsa->getPkcs12());
 
-// var_dump($encryptedTemp);
+
+$encryptedTemp = $rsa->encrypt("A");
+var_dump("encrypted", $encryptedTemp);
+$decryptedTemp = $rsa->decrypt($encryptedTemp);
+var_dump("decrypted",$decryptedTemp);
+
+
+var_dump("split", $rsa->split("adc", 1));
