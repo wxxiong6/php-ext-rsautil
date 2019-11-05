@@ -89,10 +89,33 @@ static zval getKey(zend_string *data) {
 }
 
 
+//获取属性方法
+static void rsautil_get_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
+{
+	zval *res, rv;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+	res = zend_read_property(rsautil_ce_ptr, getThis(), name, name_len, 1, &rv);
+	ZVAL_DEREF(res);
+	ZVAL_COPY(return_value, res);
+}
+
+static void rsautil_set_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
+{
+	zend_string *arg;
+
+	ZEND_PARSE_PARAMETERS_START(1,1)
+		Z_PARAM_STR(arg)
+	ZEND_PARSE_PARAMETERS_END();
+
+	zend_update_property_string(rsautil_ce_ptr, getThis(), name, name_len, ZSTR_VAL(arg));
+}
+
 PHP_METHOD(rsautil, setPkcs12) {
-	zend_string *data, *password, *crypted;
-	zval   result;
-	
+	zend_string *data, *password;
+
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		Z_PARAM_STR(data)
 		Z_PARAM_STR(password)
@@ -113,20 +136,25 @@ PHP_METHOD(rsautil, setPkcs12) {
       RETURN_FALSE;
     }
 
-	zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PKCS12), Z_REFVAL_P(&callback_params[1]) TSRMLS_CC);	
+	zval * pkcs12 = Z_REFVAL_P(&callback_params[1]);
 	zend_array *zarr;
-	zarr = Z_ARR_P(Z_REFVAL_P(&callback_params[1]));
-
-	zval *zv = zend_hash_str_find(zarr, ZEND_STRL("pkey"));
-	if (zv) {
-		zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), zv TSRMLS_CC);
-		ZVAL_DEREF(zv);
+	zarr = Z_ARR_P(pkcs12);
+	
+	zval *zv_pkey = zend_hash_str_find(zarr, ZEND_STRL("pkey"));
+	if (zv_pkey) {
+		zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), zv_pkey TSRMLS_CC);
+		ZVAL_DEREF(zv_pkey);
 	} else {
 		php_error_docref(NULL, E_WARNING, "Failed to privatekey");
 		RETURN_FALSE;
 	}
-	zval_dtor(zv);
-	zval_dtor(&callback_params[1]);
+	zval *zv_cert = zend_hash_str_find(zarr, ZEND_STRL("zv_cert"));
+	if (zv_cert && zv_pkey) {
+		zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PKCS12), pkcs12 TSRMLS_CC);	
+		ZVAL_DEREF(pkcs12);
+	}
+	
+		
 	RETURN_TRUE;
 }
 
@@ -141,7 +169,6 @@ PHP_METHOD(rsautil, setPrivateKey) {
 		Z_PARAM_ZVAL(data)
 	ZEND_PARSE_PARAMETERS_END();
 	zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), data TSRMLS_CC);
-	zval_dtor(data);
 	RETURN_TRUE;
 }
 
@@ -149,40 +176,28 @@ PHP_METHOD(rsautil, setPrivateKey) {
 PHP_METHOD(rsautil, setPublicKey) {
 	zend_string *data;
 	zval retval;
-
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_STR(data)
 	ZEND_PARSE_PARAMETERS_END();
 	retval = getKey(data);
 	zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), &retval TSRMLS_CC);
-    zval_dtor(&retval);
 	RETURN_TRUE;
 }
 
 PHP_METHOD(rsautil, getPublicKey) {
-	zval *key;
-	key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 TSRMLS_DC, NULL);
-	zval_ptr_dtor(key);
-	RETURN_RES(Z_RES_P(key));
+	rsautil_get_property(ZEND_STRL(PROPERTY_PUBLICKEY), INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }
 
 PHP_METHOD(rsautil, getPrivateKey) {
-	zval   *key;
-	key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 TSRMLS_DC, NULL);
-	zval_ptr_dtor(key);
-	RETURN_STR(Z_STR_P(key));
+	rsautil_get_property(ZEND_STRL(PROPERTY_PRIVATEKEY), INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }
 
 PHP_METHOD(rsautil, getPkcs12) {
-	zval  *key;
-	key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PKCS12), 1 TSRMLS_DC, NULL);
-	zval_ptr_dtor(key);
-	RETURN_ARR(Z_ARR_P(key));
+	rsautil_get_property(ZEND_STRL(PROPERTY_PKCS12), INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }
 
 PHP_METHOD(rsautil, decrypt)
 {
-	
 	zend_long padding = 1;
 	char * data;
 	size_t data_len;
@@ -191,19 +206,20 @@ PHP_METHOD(rsautil, decrypt)
 		Z_PARAM_STRING(data, data_len)
 	ZEND_PARSE_PARAMETERS_END();
 
-	zval  rv, *privateKey;
-	privateKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 TSRMLS_DC, &rv);
+	zval *privateKey;
+	privateKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 TSRMLS_DC, NULL);
 	if (!privateKey) {
 		php_error_docref(NULL, E_WARNING, "Failed to privateKey ");
 		RETURN_FALSE;
 	}
-	zval_dtor(&rv);
+	// php_var_dump(privateKey, 1);
+	// return ;
 	base64_str = php_base64_decode((unsigned char*) data, data_len);
 	if (!base64_str) {
 			php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
 			RETURN_FALSE;
 	}
-
+	// php_printf("base64=%s \n", base64_str);
 	zval callback_params[4];
 	ZVAL_STR_COPY(&callback_params[0], base64_str);
 	ZVAL_NEW_EMPTY_REF(&callback_params[1]);
