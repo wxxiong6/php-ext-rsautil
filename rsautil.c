@@ -17,9 +17,11 @@
 	ZEND_PARSE_PARAMETERS_END()
 #endif
 
-//类实体
-zend_class_entry *rsautil_ce_ptr;
+
+
 zend_class_entry rsautil_ce;
+zend_class_entry *rsautil_ce_ptr;
+
 
 /* {{{ PHP_RINIT_FUNCTION
  */
@@ -143,7 +145,7 @@ PHP_METHOD(rsautil, split)
 	HashTable *ht = Z_ARRVAL(arr);
 	// php_printf("array_size=%d, element=%d \n ", zend_array_count(ht), zend_hash_num_elements(ht));
 
-	zval *pulbicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 TSRMLS_DC, NULL);
+	zval *pulbicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
 	if (!pulbicKey)
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to pulbicKey ");
@@ -159,20 +161,20 @@ PHP_METHOD(rsautil, split)
 		zval *tmp;
 		ZEND_HASH_FOREACH_VAL(ht, val) {
 			ZVAL_DEREF(val);
-			ZVAL_DEREF(tmp);
-
+			
 			tmp = rsautil_encrypt(Z_STR_P(val), 1, pulbicKey);
 			if (tmp && Z_STRLEN_P(tmp) > 0) {
 				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
 				ZSTR_LEN(str) += len;
 			}
+			ZVAL_DEREF(tmp);
 		} ZEND_HASH_FOREACH_END();
 
 	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
 	RETURN_NEW_STR(str);
 }
 
-//获取属性方法
+
 static void rsautil_get_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
 {
 	zval *res, rv;
@@ -222,10 +224,10 @@ PHP_METHOD(rsautil, setPkcs12)
 		Z_PARAM_STR(password)
 	ZEND_PARSE_PARAMETERS_END();
 
-	const uint32_t MAX_PARAMS = 3;
-	zval function_name, retval, callback_params[MAX_PARAMS];
 
-	uint32_t call_func_param_cnt = MAX_PARAMS;
+	zval function_name, retval, callback_params[3];
+
+	uint32_t call_func_param_cnt = 3;
 
 	ZVAL_STRING(&function_name, "openssl_pkcs12_read");
 	ZVAL_STR_COPY(&callback_params[0], data);
@@ -317,7 +319,7 @@ PHP_METHOD(rsautil, decrypt)
 	ZEND_PARSE_PARAMETERS_END();
 
 	zval *privateKey;
-	privateKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 TSRMLS_DC, NULL);
+	privateKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
 	if (!privateKey || Z_TYPE_P(privateKey) != IS_RESOURCE)
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to privateKey ");
@@ -353,7 +355,7 @@ PHP_METHOD(rsautil, decrypt)
 		} ZEND_HASH_FOREACH_END();
 	}
 
-		uint32_t len = 0;
+		size_t len = 0;
 		str = zend_string_safe_alloc(numelems - 1, 117, 117 * numelems, 0);
 		ZSTR_LEN(str) = 0;
 		
@@ -384,7 +386,7 @@ PHP_METHOD(rsautil, encrypt)
 	Z_PARAM_STR(data)
 	ZEND_PARSE_PARAMETERS_END();
 
-	zval *pulbicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 TSRMLS_DC, NULL);
+	zval *pulbicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
 	
 	if (!pulbicKey || Z_TYPE_P(pulbicKey) != IS_RESOURCE)
 	{
@@ -413,7 +415,7 @@ PHP_METHOD(rsautil, encrypt)
 		} ZEND_HASH_FOREACH_END();
 	}
 
-		uint32_t len = 128;
+		size_t len = 128;
 		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
 		ZSTR_LEN(str) = 0;
 		
@@ -448,7 +450,7 @@ PHP_METHOD(rsautil, sign)
 
 
 	zval *privateKey;
-	privateKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 TSRMLS_DC, NULL);
+	privateKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
 	if (!privateKey || Z_TYPE_P(privateKey) != IS_RESOURCE)
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to privateKey ");
@@ -499,7 +501,7 @@ PHP_METHOD(rsautil, verify)
 	// php_printf("base64_str = %s len=%d\n", ZSTR_VAL(base64_str), ZSTR_LEN(base64_str));
 
 	zval *publicKey;
-	publicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 TSRMLS_DC, NULL);
+	publicKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
 	if (!publicKey)
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to publicKey ");
@@ -525,10 +527,12 @@ PHP_METHOD(rsautil, verify)
 
 /* {{{ rsautil_deps[] 扩展依赖
  */
+#if ZEND_MODULE_API_NO >= 20050922
 static const zend_module_dep rsautil_deps[] = {
 	ZEND_MOD_REQUIRED("openssl")
 	ZEND_MOD_END
 };
+#endif
 /* }}} */
 
 /* {{{ rsautil_functions[]
@@ -588,8 +592,12 @@ PHP_MINIT_FUNCTION(rsautil) /* {{{ */
 /* {{{ rsautil_module_entry
  */
 zend_module_entry rsautil_module_entry = {
-	STANDARD_MODULE_HEADER_EX, NULL,
-	rsautil_deps,		 //依赖
+	#if ZEND_MODULE_API_NO >= 20050922
+		STANDARD_MODULE_HEADER_EX, NULL,
+		rsautil_deps,		 
+	#else
+		STANDARD_MODULE_HEADER,
+	#endif
 	"rsautil",			 /* Extension name */
 	rsautil_functions,   /* zend_function_entry */
 	PHP_MINIT(rsautil),  /* PHP_MINIT - Module initialization */
@@ -598,7 +606,8 @@ zend_module_entry rsautil_module_entry = {
 	NULL,				 /* PHP_RSHUTDOWN - Request shutdown */
 	PHP_MINFO(rsautil),  /* PHP_MINFO - Module info */
 	PHP_RSAUTIL_VERSION, /* Version */
-	STANDARD_MODULE_PROPERTIES};
+	STANDARD_MODULE_PROPERTIES_EX
+	};
 /* }}} */
 
 #ifdef COMPILE_DL_RSAUTIL
