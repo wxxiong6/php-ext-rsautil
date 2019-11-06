@@ -606,7 +606,7 @@ zend_module_entry rsautil_module_entry = {
 	NULL,				 /* PHP_RSHUTDOWN - Request shutdown */
 	PHP_MINFO(rsautil),  /* PHP_MINFO - Module info */
 	PHP_RSAUTIL_VERSION, /* Version */
-	STANDARD_MODULE_PROPERTIES_EX
+	STANDARD_MODULE_PROPERTIES
 	};
 /* }}} */
 
