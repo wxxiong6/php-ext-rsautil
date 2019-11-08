@@ -4,11 +4,8 @@
 
 #include "php.h"
 #include "ext/standard/info.h"
-#include "ext/standard/php_string.h"
-#include "ext/standard/php_var.h"
 #include "ext/standard/base64.h"
 #include "php_rsautil.h"
-#include <string.h>
 
 /* For compatibility with older PHP versions */
 #ifndef ZEND_PARSE_PARAMETERS_NONE
@@ -90,8 +87,8 @@ static zval *rsautil_encrypt(zend_string *data, zend_long padding, zval *pulbicK
 	{
 		return NULL;
 	}
-	zval_dtor(pulbicKey);
-	zval_dtor(&retval);
+	// zval_dtor(pulbicKey);
+	// zval_dtor(&retval);
 	return Z_REFVAL_P(&callback_params[1]);
 }
 
@@ -110,8 +107,8 @@ static zval *rsautil_decrypt(zend_string *data, zend_long padding, zval *private
 	{
 		return NULL;
 	}
-	zval_dtor(privateKey);
-	zval_dtor(&retval);
+	// zval_dtor(privateKey);
+	// zval_dtor(&retval);
 	return Z_REFVAL_P(&callback_params[1]);
 }
 
@@ -211,7 +208,7 @@ static zval get_key_source(zend_string *data, char * fun_name)
 	{
 		ZVAL_FALSE(&retval);
 	}
-	zval_dtor(&callback_params[0]);
+	// zval_dtor(&callback_params[0]);
 	return retval;
 }
 
@@ -242,22 +239,23 @@ PHP_METHOD(rsautil, setPkcs12)
 	zval *pkcs12 = Z_REFVAL_P(&callback_params[1]);
 	zend_array *zarr;
 	zarr = Z_ARR_P(pkcs12);
-
+	zval_dtor(&retval);
+	zval_dtor(&callback_params[1]);
 	zval *zv_pkey = zend_hash_str_find(zarr, ZEND_STRL("pkey"));
 	if (zv_pkey && Z_TYPE_P(zv_pkey) && Z_STRLEN_P(zv_pkey) > 0)
 	{
-		zval retval;
-		retval = get_key_source(Z_STR_P(zv_pkey), "openssl_pkey_get_private");
-		zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), &retval TSRMLS_CC);
-		ZVAL_DEREF(zv_pkey);
-		zval_dtor(&retval);
+		zval retval2;
+		retval2 = get_key_source(Z_STR_P(zv_pkey), "openssl_pkey_get_private");
+		zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), &retval2 TSRMLS_CC);
+		// ZVAL_DEREF(zv_pkey);
+		zval_dtor(&retval2);
 	}
 
 	zval *zv_cert = zend_hash_str_find(zarr, ZEND_STRL("zv_cert"));
 	if (zv_cert && zv_pkey)
 	{
 		zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PKCS12), pkcs12 TSRMLS_CC);
-		ZVAL_DEREF(pkcs12);
+		// ZVAL_DEREF(pkcs12);
 	}
 
 	RETURN_TRUE;
@@ -275,7 +273,7 @@ PHP_METHOD(rsautil, setPrivateKey)
 	ZEND_PARSE_PARAMETERS_END();
 	retval = get_key_source(data, "openssl_pkey_get_private");
 	zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), &retval TSRMLS_CC);
-	zval_dtor(&retval);
+	// zval_dtor(&retval);
 	RETURN_TRUE;
 }
 
@@ -288,7 +286,7 @@ PHP_METHOD(rsautil, setPublicKey)
 	ZEND_PARSE_PARAMETERS_END();
 	retval = get_key_source(data, "openssl_pkey_get_public");
 	zend_update_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), &retval TSRMLS_CC);
-	zval_dtor(&retval);
+	// zval_dtor(&retval);
 	RETURN_TRUE;
 }
 
@@ -462,17 +460,28 @@ PHP_METHOD(rsautil, sign)
 	ZVAL_STRING(&callback_params[0], data);
 	ZVAL_NEW_EMPTY_REF(&callback_params[1]);
 	ZVAL_RES(&callback_params[2], Z_RES_P(privateKey));
+	Z_ADDREF(callback_params[2]);
 	ZVAL_LONG(&callback_params[3], signature_alg);
-
+	
 	zval function_name, retval;
 	ZVAL_STRING(&function_name, "openssl_sign");
 	if (SUCCESS != call_user_function(EG(function_table), NULL, &function_name, &retval, call_func_param_cnt, callback_params))
 	{
-		 RETURN_FALSE;
+		 RETURN_NULL();
 	}
 	zval * result = Z_REFVAL_P(&callback_params[1]);
-	// php_var_dump(&retval, 1);
-	RETURN_NEW_STR(php_base64_encode((unsigned char *)Z_STRVAL_P(result), Z_STRLEN_P(result)));
+	
+	zval_dtor(&function_name);
+	zval_dtor(&retval);
+	zval_ptr_dtor(&callback_params[0]);
+	zval_ptr_dtor(&callback_params[1]);
+	zval_ptr_dtor(&callback_params[2]);
+	zval_ptr_dtor(&callback_params[3]);
+	if (Z_TYPE_P(result) == IS_STRING && Z_STRLEN_P(result) > 0) {
+		RETURN_STR(php_base64_encode((unsigned char *)Z_STRVAL_P(result), Z_STRLEN_P(result)));
+	} else {
+		RETURN_NULL();
+	}
 }
 
 
