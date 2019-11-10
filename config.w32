@@ -1,7 +1,0 @@
-ARG_ENABLE('rsautil', 'rsautil support', 'no');
-
-if (PHP_RSAUTIL != 'no') {
-	AC_DEFINE('HAVE_RSAUTIL', 1, 'rsautil support enabled');
-
-	EXTENSION('rsautil', 'rsautil.c', null, '/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1');
-}
