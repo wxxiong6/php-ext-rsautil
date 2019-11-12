@@ -131,13 +131,15 @@ static zval *rsautil_decrypt(zend_string *data, zend_long padding, zval *key)
 		return NULL;
 	}
 
-	zval *retval2 = Z_REFVAL_P(&params[1]);
+	zval *retval2;
+	
+	retval2 = Z_REFVAL_P(&params[1]);
+
 	zval_dtor(&function_name);
 	zval_dtor(&retval);
 	zval_dtor(&params[1]);
 	zval_dtor(&params[2]);
 	zval_dtor(&params[3]);
-	// php_debug_zval_dump(retval2, 1);
 	return retval2;
 }
 
@@ -185,10 +187,12 @@ static zval rsautil_str_split(zend_string *str, zend_long split_length)
 
 	zval function_name, retval;
 	ZVAL_STRING(&function_name, "str_split");
-	if (SUCCESS != call_user_function(EG(function_table), NULL, &function_name, &retval, param_cnt, params))
+
+	if (SUCCESS != call_user_function_ex(EG(function_table), NULL, &function_name, &retval, param_cnt, params, 0, NULL))
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to split. ");
 	}
+	
 	zval_dtor(&function_name);
 	zval_dtor(&params[0]);
 	return retval;
@@ -203,6 +207,7 @@ PHP_METHOD(rsautil, split)
 		Z_PARAM_LONG(split_length)
 	ZEND_PARSE_PARAMETERS_END();
 	zval arr = rsautil_str_split(data, split_length);
+
 	// php_var_dump(&arr, 1);
 
 	HashTable *ht = Z_ARRVAL(arr);
@@ -398,6 +403,7 @@ PHP_METHOD(rsautil, decrypt)
 	char *data;
 	size_t data_len;
 	zend_string *base64_str = NULL;
+	zend_string *str = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 	Z_PARAM_STRING(data, data_len)
@@ -417,33 +423,43 @@ PHP_METHOD(rsautil, decrypt)
 		php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
 		RETURN_FALSE;
 	}
-
-
 	zend_long split_length = 128;
+	zval *tmp;
+	if (ZSTR_LEN(base64_str) <= split_length) {
+		tmp = rsautil_decrypt(base64_str, padding, private_key);
+		zend_string_release(base64_str);
+		str = Z_STR_P(tmp);
+		zval_dtor(tmp);
+		RETURN_STR(str);
+	} else {
+	
 	zval arr = rsautil_str_split(base64_str, split_length);
-
+	zend_string_release(base64_str);
+	if (Z_TYPE(arr) == IS_FALSE) {
+		php_error_docref(NULL, E_WARNING, "Failed to  split");
+		RETURN_FALSE;
+	}
+	
 	HashTable *ht = Z_ARRVAL(arr);
 	uint32_t numelems = zend_hash_num_elements(ht);
 	zend_string *str = NULL;
 
 	zval *val;
-	zval *tmp;
+	
 
-	if (numelems == 0) {
-		RETURN_EMPTY_STRING();
-	} else if (numelems == 1) {
+	
 		ZEND_HASH_FOREACH_VAL(ht, val) {
 			tmp = rsautil_decrypt(Z_STR_P(val), padding, private_key);
 			if (tmp && Z_STRLEN_P(tmp) > 0) {
 				zval_dtor(val);
 				zval_dtor(tmp);
-				zend_string_release(base64_str);
 				zval_dtor(&arr);
 				str = Z_STR_P(tmp);
 				RETURN_STR(str);
 			}
 		} ZEND_HASH_FOREACH_END();
-	}
+	
+}
 
 }
 
@@ -468,6 +484,7 @@ PHP_METHOD(rsautil, encrypt)
 	}
 
 	zend_long split_length = 117;
+	
 	zval arr = rsautil_str_split(data, split_length);
 	HashTable *ht = Z_ARRVAL(arr);
 	zend_string *str = NULL;
