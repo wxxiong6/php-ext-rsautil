@@ -100,13 +100,12 @@ static zval *rsautil_encrypt(zend_string *data, zend_long padding, zval *public_
 	{
 		zval_dtor(&params[1]);
 		zval_dtor(&retval);	
-		php_error_docref(NULL, E_WARNING, "Failed to rsautil_decrypt ");
+		php_error_docref(NULL, E_WARNING, "Failed to rsautil_encrypt ");
 		return NULL;
 	}	
 	zval *retval2 = Z_REFVAL_P(&params[1]);
 	zval_dtor(&retval);
-	ZVAL_UNREF(&params[1]);
-	// zval_dtor(&params[1]);
+	zval_dtor(&params[1]);
 	return retval2;
 }
 
@@ -115,7 +114,9 @@ static zval *rsautil_decrypt(const char *data, size_t data_len, zend_long paddin
 
 	zval params[4];
 	uint32_t param_cnt = 4;
+
 	ZVAL_STRINGL(&params[0], data, data_len);
+	
 	ZVAL_NEW_REF(&params[1], &EG(uninitialized_zval));
 	ZVAL_RES(&params[2], Z_RES_P(key));
 	ZVAL_LONG(&params[3], padding);
@@ -123,7 +124,7 @@ static zval *rsautil_decrypt(const char *data, size_t data_len, zend_long paddin
 	zval function_name, retval;
 	ZVAL_STRING(&function_name, "openssl_private_decrypt");
 
-	// php_debug_zval_dump(&params[0], 1);return NULL;
+	
 	int result =  call_user_function_ex(EG(function_table), NULL, &function_name, &retval, param_cnt, params, 0, NULL);
 
 	zval_dtor(&params[0]);
@@ -133,13 +134,13 @@ static zval *rsautil_decrypt(const char *data, size_t data_len, zend_long paddin
 
 	if (result != SUCCESS || Z_TYPE(retval) != IS_TRUE) 
 	{
-		ZVAL_UNREF(&params[1]);
+		zval_dtor(&params[1]);
 		zval_dtor(&retval);	
 		php_error_docref(NULL, E_WARNING, "Failed to rsautil_decrypt.");
 		return NULL;
 	}	
 	zval *retval2 = Z_REFVAL_P(&params[1]);
-	ZVAL_UNREF(&params[1]);
+	zval_dtor(&params[1]);
 	zval_dtor(&retval);
 	return retval2;
 }
@@ -383,7 +384,7 @@ PHP_METHOD(rsautil, decrypt)
 		php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
 		RETURN_FALSE;
 	}
-	
+	// php_printf("str=%s, len=%d\n", ZSTR_VAL(base64_str), ZSTR_LEN(base64_str));
 	if (ZSTR_LEN(base64_str) <= split_length) {
 		tmp = rsautil_decrypt(ZSTR_VAL(base64_str), ZSTR_LEN(base64_str), padding, private_key);
 		zend_string_release(base64_str);
@@ -391,31 +392,48 @@ PHP_METHOD(rsautil, decrypt)
 		zval_dtor(tmp);
 		RETURN_STR(str);
 	} else {
-		const char *p;
-		size_t numelems;
-		numelems = ZSTR_LEN(base64_str) / split_length;
-		// php_printf("len=%d,size=%d, str=%s\n", ZSTR_LEN(base64_str), numelems, ZSTR_VAL(base64_str));
-		p = ZSTR_VAL(base64_str);
-		zend_string_release(base64_str);
-		str = zend_string_safe_alloc(numelems - 1, split_length,  split_length * numelems, 0);
-		while (numelems-- > 0) {
-			php_printf("num=%d,len=%d str=%s \n",numelems, strlen(p), p);
-			p += split_length;
-//  tmp = rsautil_decrypt(p, split_length, padding, private_key);
-			// if (tmp && Z_STRLEN_P(tmp) > 0) {
-				// memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
-				// ZSTR_LEN(str) += Z_STRLEN_P(tmp);
-			// }
-			// php_printf("len=%d str=%s \n", strlen(p), p);
-			// memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), p, split_length);
-		}	
-		if (p != (ZSTR_VAL(base64_str) + ZSTR_LEN(base64_str))) {
-			// memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), p, (ZSTR_VAL(base64_str) + ZSTR_LEN(base64_str))-p);
-		}
 	
-		ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
-		zval_dtor(tmp);
-		RETURN_STR(str);
+	
+	const char *p;
+	char *to;
+	size_t numelems = 0;
+
+
+	numelems = ZSTR_LEN(base64_str) / split_length;
+
+	p = ZSTR_VAL(base64_str);
+	// printf("base64=%s\n", p);
+ 	str = zend_string_safe_alloc(numelems, split_length,  ZSTR_LEN(base64_str)+1, 0);
+	//  char *char_str = emalloc(split_length * numelems);
+	//  carh *tmp_str = emalloc(split_length);
+	//  str = zend_string_safe_alloc(1, len,  , 0);
+	// to = (char*)ZSTR_VAL(str);
+	zend_string *tmp_str = NULL;
+	// tmp_str = zend_string_safe_alloc(1, split_length,  0, 0);
+	int i = 0;
+	while (numelems-- > 0) {
+		// memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), split_length);
+		tmp_str = zend_string_init(p, split_length, 0);
+		tmp = rsautil_decrypt(ZSTR_VAL(tmp_str), ZSTR_LEN(tmp_str), padding, private_key);
+		memcpy(ZSTR_VAL(str)+i, tmp, ZSTR_LEN(str));
+		// printf("numelems=%d, p=%p, str=%s, len=%d\n", numelems, ZSTR_VAL(tmp_str), ZSTR_VAL(tmp_str), ZSTR_LEN(tmp_str));
+		// printf("numelems=%d, p=%p, str=%s, len=%d\n", numelems, p, p, sizeof(p));
+		// printf("tmp=%s\n", tmp);
+		p += split_length;
+		i += ZSTR_LEN(str);
+		
+		// tmp = rsautil_decrypt(zend_string_init(p, split_length, 0), padding, private_key);
+	
+	}
+
+	if (p != (ZSTR_VAL(base64_str) + ZSTR_LEN(base64_str))) {
+		memcpy(ZSTR_VAL(str)+i, p,  (ZSTR_VAL(base64_str) + ZSTR_LEN(base64_str) - p));
+	}
+
+	zend_string_release(base64_str);
+
+	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
+	 RETURN_STR(str);
 	}
 }
 // PHP_METHOD(rsautil, decrypt)
