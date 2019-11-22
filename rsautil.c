@@ -3,14 +3,12 @@
 #endif
 
 #include "php.h"
-#include "php_ini.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_string.h"
 #include "ext/standard/php_var.h"
 #include "ext/standard/base64.h"
 #include "php_rsautil.h"
 #include "zend_smart_str.h"
-#include "Zend/zend_exceptions.h"
 
 /* For compatibility with older PHP versions */
 #ifndef ZEND_PARSE_PARAMETERS_NONE
@@ -81,32 +79,102 @@ ZEND_BEGIN_ARG_INFO(arginfo_rsautil_void, 0)
 ZEND_END_ARG_INFO()
 /* }}} */
 
-static void rsautil_call_function(zval *func, int argc, zval *argv, zval *retval)
+
+static zval *rsautil_encrypt(zend_string *data, zend_long padding, zval *public_key)
 {
-	int i;
-	if (call_user_function_ex(EG(function_table), NULL, func, retval, argc, argv, 1, NULL) == FAILURE) {
-		zval_ptr_dtor(retval);
-		ZVAL_UNDEF(retval);
-		php_error_docref(NULL, E_WARNING, "Unable to call %s", Z_STR_P(func));
-	} else if (Z_ISUNDEF_P(retval)) {
-		ZVAL_NULL(retval);
+	zval params[4];
+	uint32_t param_cnt = 4;
+	ZVAL_STR_COPY(&params[0], data);
+	ZVAL_NEW_EMPTY_REF(&params[1]);
+	ZVAL_RES(&params[2], Z_RES_P(public_key));
+	ZVAL_LONG(&params[3], padding);
+
+	zval function_name, retval;
+	ZVAL_STRING(&function_name, "openssl_public_encrypt");
+	int result = call_user_function(EG(function_table), NULL, &function_name, &retval, param_cnt, params);
+	zval_dtor(&params[0]);
+	zval_dtor(&params[2]);
+	zval_dtor(&params[3]);
+	zval_dtor(&function_name);
+	if (result != SUCCESS || Z_TYPE(retval) != IS_TRUE) 
+	{
+		zval_dtor(&params[1]);
+		zval_dtor(&retval);	
+		php_error_docref(NULL, E_WARNING, "Failed to rsautil_decrypt ");
+		return NULL;
+	}	
+	zval *retval2 = Z_REFVAL_P(&params[1]);
+	zval_dtor(&retval);
+	ZVAL_UNREF(&params[1]);
+	zval_dtor(&params[1]);
+	return retval2;
+}
+
+static zval *rsautil_decrypt(const char *data, size_t data_len, zend_long padding, zval *key)
+{
+
+	zval params[4];
+	uint32_t param_cnt = 4;
+	ZVAL_STRINGL(&params[0], data, data_len);
+	ZVAL_NEW_REF(&params[1], &EG(uninitialized_zval));
+	ZVAL_RES(&params[2], Z_RES_P(key));
+	ZVAL_LONG(&params[3], padding);
+
+	zval function_name, retval;
+	ZVAL_STRING(&function_name, "openssl_private_decrypt");
+
+	// php_debug_zval_dump(&params[0], 1);return NULL;
+	int result =  call_user_function_ex(EG(function_table), NULL, &function_name, &retval, param_cnt, params, 0, NULL);
+
+	zval_dtor(&params[0]);
+	zval_dtor(&params[2]);
+	zval_dtor(&params[3]);
+	zval_dtor(&function_name);
+
+	if (result != SUCCESS || Z_TYPE(retval) != IS_TRUE) 
+	{
+		ZVAL_UNREF(&params[1]);
+		zval_dtor(&retval);	
+		php_error_docref(NULL, E_WARNING, "Failed to rsautil_decrypt result=%d retval=%d. ", result, Z_TYPE(retval));
+		return NULL;
+	}	
+	zval *retval2 = Z_REFVAL_P(&params[1]);
+	ZVAL_UNREF(&params[1]);
+	zval_dtor(&params[1]);
+	zval_dtor(&retval);
+	return retval2;
+}
+
+static zval *rsautil_str_split2(zend_string *str, zend_long split_length) {
+	zval *dest;
+	
+	const char *p;
+	size_t n_reg_segments;
+
+	if (split_length <= 0) {
+		php_error_docref(NULL, E_WARNING, "The length of each segment must be greater than zero");
+		return NULL;
+	}
+	
+	if (0 == ZSTR_LEN(str) || (size_t)split_length >= ZSTR_LEN(str)) {
+		array_init_size(dest, 1);
+		add_next_index_stringl(dest, ZSTR_VAL(str), ZSTR_LEN(str));	
 	}
 
-	for (i = 0; i < argc; i++) {
-		switch(Z_TYPE(argv[i])) 
-		{
-			case IS_RESOURCE:
-				ZVAL_NULL(&argv[i]);
-				break;
-			case IS_REFERENCE:
-				retval = Z_REFVAL(argv[i]);
-				break;
-		}
+	array_init_size(dest, (uint32_t)(((ZSTR_LEN(str) - 1) / split_length) + 1));
 
-		for (i = 0; i < argc; i++) {
-			zval_ptr_dtor(&argv[i]);
-		}
+	n_reg_segments = ZSTR_LEN(str) / split_length;
+	p = ZSTR_VAL(str);
+
+	while (n_reg_segments-- > 0) {
+		add_next_index_stringl(dest, p, split_length);
+		p += split_length;
 	}
+
+	if (p != (ZSTR_VAL(str) + ZSTR_LEN(str))) {
+		add_next_index_stringl(dest, p, (ZSTR_VAL(str) + ZSTR_LEN(str) - p));
+	}
+	return dest;
 }
 
 static zval rsautil_str_split(zend_string *str, zend_long split_length)
@@ -290,124 +358,19 @@ PHP_METHOD(rsautil, getPkcs12)
 	rsautil_get_property(ZEND_STRL(PROPERTY_PKCS12), INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }
 
-static zval *rsautil_encrypt(zend_string *data, zend_long padding, zval *key)
-{
-	zval params[4], function_name, retval, *result_zval;
-	uint32_t param_cnt = 4;
-	ZVAL_STR_COPY(&params[0], data);
-	ZVAL_NEW_EMPTY_REF(&params[1]);
-	ZVAL_RES(&params[2], Z_RES_P(key));
-	ZVAL_LONG(&params[3], padding);
-	ZVAL_STRING(&function_name, "openssl_public_encrypt");
-	int result = call_user_function(EG(function_table), NULL, &function_name, &retval, param_cnt, params);
-	
-	if (result != SUCCESS || Z_TYPE(retval) != IS_TRUE) 
-	{
-		php_error_docref(NULL, E_WARNING, "Failed to rsautil_encrypt ");
-		return NULL;
-	}	
-	result_zval = Z_REFVAL(params[1]);
-	zval_dtor(&retval);
-	zval_dtor(&function_name);
-	zval_dtor(&params[0]);
-	zval_dtor(&params[2]);
-	zval_dtor(&params[3]);
-	zval_dtor(&params[1]);
-	return  result_zval;
-}
-
-static zval *rsautil_decrypt(zend_string *data, zend_long padding, zval *key)
-{
-	zval params[4], function_name, retval, *result_zval;
-	uint32_t param_cnt = 4;
-	
-	if (ZSTR_LEN(data) != 128)
-	{
-		php_error_docref(NULL, E_WARNING, "Failed to data lenght 128.");
-		return NULL;
-	}
-
-	ZVAL_STR_COPY(&params[0], data);
-	ZVAL_NEW_EMPTY_REF(&params[1]);
-	ZVAL_RES(&params[2], Z_RES_P(key));
-	ZVAL_LONG(&params[3], padding);
-	ZVAL_STRING(&function_name, "openssl_private_decrypt");
-	int result =  call_user_function(EG(function_table), NULL, &function_name, &retval, param_cnt, params);
-
-	zval_dtor(&function_name);
-	if (result != SUCCESS || Z_TYPE(retval) != IS_TRUE) 
-	{
-		php_error_docref(NULL, E_WARNING, "Failed to rsautil_decrypt.");
-		return NULL;
-	}	
-	result_zval = Z_REFVAL(params[1]);
-	zval_dtor(&retval);
-	zval_dtor(&function_name);
-	zval_dtor(&params[0]);
-	zval_dtor(&params[2]);
-	zval_dtor(&params[3]);
-	zval_dtor(&params[1]);
-	return  result_zval;
-}
-
-PHP_METHOD(rsautil, encrypt)
-{
-	zend_long padding = 1;
-	char *data;
-	size_t data_len;
-	zend_string  *str, *tmp_str;
-	zval *tmp;
-	zend_long split_length = 117;
-
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_STRING(data, data_len)
-	ZEND_PARSE_PARAMETERS_END();
-
-	if (sizeof(data) < 1 || data_len < 1) {
-		php_error_docref(NULL, E_WARNING, "Failed to decrypt the input zero char.");
-		RETURN_FALSE;
-	}	
-
-	zval *public_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
-	
-	if (!public_key || Z_TYPE_P(public_key) != IS_RESOURCE)
-	{
-		php_error_docref(NULL, E_WARNING, "Failed to public_key. ");
-		RETURN_FALSE;
-	}
-
-	if (data_len <= split_length) {
-		tmp_str = zend_string_init(data, data_len, 0);
-		tmp = rsautil_encrypt(tmp_str, padding, public_key);
-		str = php_base64_encode((unsigned char *)Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
-		zend_string_release(tmp_str);
-		RETURN_STR(str);
-	} else if(data_len > split_length) {
-
-	} else if (data_len == 0) {
-		RETURN_EMPTY_STRING();
-	}
-}
-
 PHP_METHOD(rsautil, decrypt)
 {
 	zend_long padding = 1;
 	char *data;
 	size_t data_len;
-	zend_string *encrypt_str = NULL;
+	zend_string *base64_str = NULL, *str = NULL;
 	zend_long split_length = 128;
 	zval *tmp, *private_key;
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_STRING(data, data_len)
+	Z_PARAM_STRING(data, data_len)
 	ZEND_PARSE_PARAMETERS_END();
 		
-	if (sizeof(data) < 1 || data_len < 1) {
-		php_error_docref(NULL, E_WARNING, "Failed to decrypt the input zero char.");
-		RETURN_FALSE;
-	}	
-
 	private_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
 	if (!private_key || Z_TYPE_P(private_key) != IS_RESOURCE)
 	{
@@ -415,195 +378,122 @@ PHP_METHOD(rsautil, decrypt)
 		RETURN_FALSE;
 	}
 
-	encrypt_str = php_base64_decode((unsigned char *)data, data_len);
-	if (!encrypt_str)
+	base64_str = php_base64_decode((unsigned char *)data, data_len);
+	if (!base64_str)
 	{
 		php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
 		RETURN_FALSE;
 	}
-	// php_printf("str=%s, len=%d\n", ZSTR_VAL(encrypt_str), ZSTR_LEN(encrypt_str));
-	if (ZSTR_LEN(encrypt_str) <= split_length) {
-		tmp = rsautil_decrypt(encrypt_str, padding, private_key);
-		zend_string_release(encrypt_str);
-		ZVAL_DEREF(tmp);
-		ZVAL_COPY(return_value, tmp);
-		return ;
-	} else if (ZSTR_LEN(encrypt_str) > split_length) {
+	
+	if (ZSTR_LEN(base64_str) <= split_length) {
+		tmp = rsautil_decrypt(ZSTR_VAL(base64_str), ZSTR_LEN(base64_str), padding, private_key);
+		zend_string_release(base64_str);
+		str = Z_STR_P(tmp);
+		zval_dtor(tmp);
+		RETURN_STR(str);
+	} else {
 		const char *p;
-		size_t numelems = 0;
-		smart_str str = {0};
-		numelems = ZSTR_LEN(encrypt_str) / split_length;
-		p = ZSTR_VAL(encrypt_str);
-		zend_string *tmp_str = NULL;
-		// tmp_str = zend_string_safe_alloc(1, split_length,  0, 0);
-		int i = 0;
+		size_t numelems;
+		numelems = ZSTR_LEN(base64_str) / split_length;
+		smart_str            string = {0};
+		p = ZSTR_VAL(base64_str);
+		zend_string_release(base64_str);
+	
 		while (numelems-- > 0) {
-			// memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), split_length);
-			tmp_str = zend_string_init(p, split_length, 0);
-			// tmp = rsautil_decrypt(ZSTR_VAL(tmp_str), ZSTR_LEN(tmp_str), padding, private_key);
-			smart_str_appendl(&str, ZSTR_VAL(tmp_str), ZSTR_LEN(tmp_str));
-			// memcpy(ZSTR_VAL(str)+i, tmp, ZSTR_LEN(str));
-			// printf("numelems=%d, p=%p, str=%s, len=%d\n", numelems, ZSTR_VAL(tmp_str), ZSTR_VAL(tmp_str), ZSTR_LEN(tmp_str));
+			// php_printf("num=%d,len=%d str=%s \n",numelems, strlen(p), p);
 			p += split_length;
-			// tmp = rsautil_decrypt(zend_string_init(p, split_length, 0), padding, private_key);
-		}
-
-		if (p != (ZSTR_VAL(encrypt_str) + ZSTR_LEN(encrypt_str))) {
-			smart_str_appendl(&str, p, (ZSTR_VAL(encrypt_str) + ZSTR_LEN(encrypt_str) - p));
-		}
-		zend_string_release(encrypt_str);
-		smart_str_0(&str);
+			 tmp = rsautil_decrypt(p, split_length, padding, private_key);
+			 if (tmp) {
+				smart_str_appendl(&string, Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+			 }
+			
+		}	
+		// if (p != (ZSTR_VAL(base64_str) + ZSTR_LEN(base64_str))) {
+			
+			// memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), p, (ZSTR_VAL(base64_str) + ZSTR_LEN(base64_str))-p);
+		// }
+	
+		// ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
 		
-		if (str.s == NULL) {
-			RETURN_FALSE;
-		}
-
-		RETURN_STR(str.s);
-	} else if (ZSTR_LEN(encrypt_str) == 0) {
-		RETURN_EMPTY_STRING();
+		smart_str_0(&string);
+		RETURN_STR(string.s);
 	}
 }
 
 
-// PHP_METHOD(rsautil, decrypt)
-// {
-// 	zend_long padding = 1;
-// 	char *data;
-// 	size_t data_len;
-// 	zend_string *base64_str = NULL, *str = NULL;
-// 	zend_long split_length = 128;
-// 	zval *tmp, *private_key;
-
-// 	ZEND_PARSE_PARAMETERS_START(1, 1)
-// 	Z_PARAM_STRING(data, data_len)
-// 	ZEND_PARSE_PARAMETERS_END();
-		
-// 	private_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
-// 	if (!private_key || Z_TYPE_P(private_key) != IS_RESOURCE)
-// 	{
-// 		php_error_docref(NULL, E_WARNING, "Failed to private_key ");
-// 		RETURN_FALSE;
-// 	}
-
-// 	base64_str = php_base64_decode((unsigned char *)data, data_len);
-// 	if (!base64_str)
-// 	{
-// 		php_error_docref(NULL, E_WARNING, "Failed to base64 decode the input");
-// 		RETURN_FALSE;
-// 	}
-	
-// 	if (ZSTR_LEN(base64_str) <= split_length) {
-// 		tmp = rsautil_decrypt(base64_str, padding, private_key);
-// 		zend_string_release(base64_str);
-// 		str = Z_STR_P(tmp);
-// 		zval_dtor(tmp);
-// 		RETURN_STR(str);
-// 	} else {
-	
-// 	zval *arr = rsautil_str_split2(base64_str, split_length);
-// 	if (arr == NULL){
-// 	// if (Z_TYPE(arr) == IS_FALSE) {
-// 		php_error_docref(NULL, E_WARNING, "Failed to rsautil_str_split ");
-// 		RETURN_FALSE;
-// 	}
-// 	zend_string_release(base64_str);
-
-// 	HashTable *ht = Z_ARRVAL_P(arr);
-// 	uint32_t numelems = zend_hash_num_elements(ht);
-// 	size_t len = 117;
-// 	str = zend_string_safe_alloc(numelems - 1, len,  len * numelems, 0);
-// 	ZSTR_LEN(str) = 0;
-// 	zval *val;
-// 	ZEND_HASH_FOREACH_VAL(ht, val) {
-// 		ZVAL_DEREF(val);
-// 		ZVAL_DEREF(tmp);
-// 		tmp = rsautil_decrypt(Z_STR_P(val), padding, private_key);
-// 		if (tmp && Z_STRLEN_P(tmp) > 0) {
-// 			memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
-// 			ZSTR_LEN(str) += Z_STRLEN_P(tmp);
-// 		}
-// 	} ZEND_HASH_FOREACH_END();
-
-// 	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
-// 	 RETURN_STR(str);
-// 	}
-// }
-
 /* {{{ void rsautil::encrypt($encrypted)
  */
 
-// PHP_METHOD(rsautil, encrypt)
-// {
-// 	zend_long padding = 1;
-// 	zend_string *data;
+PHP_METHOD(rsautil, encrypt)
+{
+	zend_long padding = 1;
+	zend_string *data;
 
-// 	ZEND_PARSE_PARAMETERS_START(1, 1)
-// 	Z_PARAM_STR(data)
-// 	ZEND_PARSE_PARAMETERS_END();
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+	Z_PARAM_STR(data)
+	ZEND_PARSE_PARAMETERS_END();
 
-// 	zval *public_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
+	zval *public_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
 	
-// 	if (!public_key || Z_TYPE_P(public_key) != IS_RESOURCE)
-// 	{
-// 		php_error_docref(NULL, E_WARNING, "Failed to public_key ");
-// 		RETURN_FALSE;
-// 	}
+	if (!public_key || Z_TYPE_P(public_key) != IS_RESOURCE)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to public_key ");
+		RETURN_FALSE;
+	}
 
-// 	zend_long split_length = 117;
+	zend_long split_length = 117;
 	
-// 	zval arr = rsautil_str_split(data, split_length);
-// 	if (Z_TYPE(arr) == IS_FALSE) {
-// 		php_error_docref(NULL, E_WARNING, "Failed to rsautil_str_split ");
-// 		RETURN_FALSE;
-// 	}
+	zval arr = rsautil_str_split(data, split_length);
+	if (Z_TYPE(arr) == IS_FALSE) {
+		php_error_docref(NULL, E_WARNING, "Failed to rsautil_str_split ");
+		RETURN_FALSE;
+	}
 	
-// 	HashTable *ht = Z_ARRVAL(arr);
+	HashTable *ht = Z_ARRVAL(arr);
 
-// 	zend_string *str = NULL;
-//     uint32_t numelems = zend_hash_num_elements(ht);
+	zend_string *str = NULL;
+    uint32_t numelems = zend_hash_num_elements(ht);
 
-// 	zval *val;
-// 	zval *tmp;
+	zval *val;
+	zval *tmp;
 
-// 	if (numelems == 0) {
-// 		RETURN_EMPTY_STRING();
-// 	} else if (numelems == 1) {
-// 		/* loop to search the first not undefined element... */
-// 		ZEND_HASH_FOREACH_VAL(ht, val) {
-// 			tmp = rsautil_encrypt(Z_STR_P(val), padding, public_key);
-// 			if (tmp && Z_STRLEN_P(tmp) > 0) {
-// 				zval_dtor(val);
-// 				zval_dtor(tmp);
-// 				str = php_base64_encode((unsigned char *)Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
-// 				// ZVAL_DEREF(tmp);
-// 				RETURN_NEW_STR(str);
-// 				return ;
-// 			} else {
-// 				RETURN_EMPTY_STRING();
-// 			}
+	if (numelems == 0) {
+		RETURN_EMPTY_STRING();
+	} else if (numelems == 1) {
+		/* loop to search the first not undefined element... */
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			tmp = rsautil_encrypt(Z_STR_P(val), padding, public_key);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				zval_dtor(val);
+				zval_dtor(tmp);
+				str = php_base64_encode((unsigned char *)Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+				RETURN_STR(str);
+			} else {
+				RETURN_EMPTY_STRING();
+			}
 			
-// 		} ZEND_HASH_FOREACH_END();
-// 	}
+		} ZEND_HASH_FOREACH_END();
+	}
 
-// 		size_t len = 128;
-// 		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
-// 		ZSTR_LEN(str) = 0;
+		size_t len = 128;
+		str = zend_string_safe_alloc(numelems - 1, len, len * numelems, 0);
+		ZSTR_LEN(str) = 0;
 		
-// 		ZEND_HASH_FOREACH_VAL(ht, val) {
-// 			// ZVAL_DEREF(val);
-// 			// ZVAL_DEREF(tmp);
+		ZEND_HASH_FOREACH_VAL(ht, val) {
+			// ZVAL_DEREF(val);
+			// ZVAL_DEREF(tmp);
 
-// 			tmp = rsautil_encrypt(Z_STR_P(val), padding, public_key);
-// 			if (tmp && Z_STRLEN_P(tmp) > 0) {
-// 				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
-// 				ZSTR_LEN(str) += len;
-// 			}
-// 		} ZEND_HASH_FOREACH_END();
+			tmp = rsautil_encrypt(Z_STR_P(val), padding, public_key);
+			if (tmp && Z_STRLEN_P(tmp) > 0) {
+				memcpy(ZSTR_VAL(str) + ZSTR_LEN(str), Z_STRVAL_P(tmp), Z_STRLEN_P(tmp));
+				ZSTR_LEN(str) += len;
+			}
+		} ZEND_HASH_FOREACH_END();
 
-// 	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
+	 ZSTR_VAL(str)[ZSTR_LEN(str)] = '\0';
 	
-// 	RETURN_STR(php_base64_encode((unsigned char *)ZSTR_VAL(str), ZSTR_LEN(str)));
-// }
+	RETURN_STR(php_base64_encode((unsigned char *)ZSTR_VAL(str), ZSTR_LEN(str)));
+}
 /* }}} */
 
 /* {{{ void rsautil::sign($data, $signature_alg)
