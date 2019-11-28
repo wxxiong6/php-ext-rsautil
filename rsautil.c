@@ -88,15 +88,14 @@ PHP_METHOD(rsautil, split)
 
 static void rsautil_get_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
 {
-	zval *res, rv;
+	zval *res;
 
 	if (zend_parse_parameters_none() == FAILURE)
 	{
 		return;
 	}
-	res = zend_read_property(rsautil_ce_ptr, getThis(), name, name_len, 1, &rv);
-	zval_ptr_dtor(&rv);
-	ZVAL_COPY(return_value, res);
+	res = zend_read_property(rsautil_ce_ptr, getThis(), name, name_len, 1, NULL);
+	RETURN_ZVAL(res, 0, 0);
 }
 
 static void rsautil_set_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
