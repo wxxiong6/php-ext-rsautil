@@ -1,22 +1,31 @@
 <?php
-$rsa = new RsaUtil();
-$pub = file_get_contents(__DIR__.'/szkingdom_pub.cer');
-$pri = file_get_contents(__DIR__.'/szkingdom_pri.pfx');
+
+$rsa = new RSAUtil();
+$pub = file_get_contents(__DIR__.'/tests/rsa_public_key.pem');
+$pri = file_get_contents(__DIR__.'/tests/rsa_private_key.pem');
 
 var_dump($rsa->setPublicKey($pub));
-var_dump($rsa->setPkcs12($pri, "12345678"));
+var_dump($rsa->setPrivateKey($pri));
 
-var_dump("getPublicKey", $rsa->getPublicKey());
-var_dump("getPrivateKey", $rsa->getPrivateKey());
+var_dump("getPublicKey",         $rsa->getPublicKey());
+debug_zval_dump("getPrivateKey", $rsa->getPrivateKey());
 
-
-$encryptedTemp = $rsa->encrypt("AAAAAA");
+echo "------------------", "私钥加密公钥解密", "---------------------", " \n";
+$encryptedTemp = $rsa->publicEncrypt("公钥加密私钥解密吼吼！");
 var_dump("encrypted", $encryptedTemp);
-$decryptedTemp = $rsa->decrypt($encryptedTemp);
+$decryptedTemp = $rsa->privateDecrypt($encryptedTemp);
 var_dump("decrypted", $decryptedTemp);
-$sign = $rsa->sign("abc", 2);
-var_dump("sign", $sign, 2);
-$verify = $rsa->verify("abc", $sign, 2);
-var_dump("verify", $verify);
 
-// var_dump("split", $rsa->split("adc", 1));
+$sign = $rsa->sign($encryptedTemp, OPENSSL_ALGO_MD5);
+var_dump("sign", $sign);
+
+
+echo "------------------", "私钥加密公钥解密", "---------------------", " \n";
+$encryptedTemp1 = $rsa->privateEncrypt("私钥加密公钥解密哈哈！");
+var_dump("encrypted", $encryptedTemp1);
+$decryptedTemp1 = $rsa->publicDecrypt($encryptedTemp1);
+var_dump("decrypted", $decryptedTemp1);
+
+
+$verify = $rsa->verify($encryptedTemp, $sign, OPENSSL_ALGO_MD5);
+var_dump("verify", $verify);
