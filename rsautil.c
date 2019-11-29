@@ -235,7 +235,7 @@ static int call_funcion_with_param4(char *data, size_t data_len, char *func_name
 	zval function_name, retval, params[4];
 	int param_cnt = 4;
 
-	ZVAL_STRINGL(&params[0], data, data_len);
+	ZVAL_STRINGL(&params[0], 　　data, data_len);
 	ZVAL_NEW_REF(&params[1],    &EG(uninitialized_zval));
 	ZVAL_RES(&params[2],        Z_RES_P(key));
 	ZVAL_LONG(&params[3],       padding);	
@@ -270,12 +270,8 @@ static int call_funcion_with_param4(char *data, size_t data_len, char *func_name
 		return FAILURE;
 	}	
 
-	if (Z_ISREF(retval)) {
-		zend_unwrap_reference(&retval);
-	}
-
 	if (Z_ISREF(params[1])) {
-		zend_unwrap_reference(&params[1]);
+		ZVAL_UNREF(&params[1]);
 	}
 
 	memcpy(*str, Z_STRVAL(params[1]), Z_STRLEN(params[1]));
