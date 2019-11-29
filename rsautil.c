@@ -283,53 +283,16 @@ static int call_funcion_with_param4(char *data, size_t data_len, char *func_name
 	return  SUCCESS;
 }
 
-PHP_METHOD(rsautil, privateEncrypt)
-{
-
-}
-
-PHP_METHOD(rsautil, publicDecrypt)
-{
-	
-}
-
-PHP_METHOD(rsautil, encrypt)
-{
-
-}
-
-PHP_METHOD(rsautil, decrypt)
-{
-	
-}
-/* {{{ void rsautil::publicEncrypt($encrypted)
- */
-
-PHP_METHOD(rsautil, publicEncrypt)
-{
-	zend_long padding = 1;
-	zend_string *data;
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_STR(data)
-	ZEND_PARSE_PARAMETERS_END();
-
-	zval *public_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
-
-	if (!public_key || Z_TYPE_P(public_key) != IS_RESOURCE)
-	{
-		php_error_docref(NULL, E_WARNING, "Failed to public_key ");
-		RETURN_FALSE;
-	}
-
+static void rsautil_encrypt(char *data, size_t data_len, zval *pKey, char* encrypt_name, INTERNAL_FUNCTION_PARAMETERS){
 	size_t split_length = 117;
 	zend_string *str = NULL;
+	zend_long padding = 1;
 	int res;
 	char *char_str = emalloc(split_length);
 	size_t char_str_len;
 
-	if (ZSTR_LEN(data) <= split_length) {
-		res = call_funcion_with_param4(ZSTR_VAL(data), ZSTR_LEN(data), "openssl_public_encrypt", padding, public_key, &char_str, &char_str_len);
+	if (data_len <= split_length) {
+		res = call_funcion_with_param4(data, data_len, encrypt_name, padding, pKey, &char_str, &char_str_len);
 			if (res == SUCCESS) {
 				str = php_base64_encode((unsigned char *)char_str, char_str_len);
 				if (char_str) {
@@ -339,24 +302,24 @@ PHP_METHOD(rsautil, publicEncrypt)
 			} else {
 				RETURN_EMPTY_STRING();
 			}
-	} else if (ZSTR_LEN(data) > split_length) {
+	} else if (data_len > split_length) {
 		char *p;
 		char *t = emalloc(split_length);
 		size_t numelems;
-		numelems = ZSTR_LEN(data) / split_length;
+		numelems = data_len / split_length;
 		smart_str            string = {0};
-		p = ZSTR_VAL(data);
+		p = data;
 		while (numelems-- > 0) {
 			memcpy(t, p, split_length);	
-			 res = call_funcion_with_param4(t, split_length, "openssl_public_encrypt", padding, public_key, &char_str, &char_str_len);
+			 res = call_funcion_with_param4(t, split_length, encrypt_name, padding, pKey, &char_str, &char_str_len);
 			 if (res == SUCCESS) {
 				smart_str_appendl(&string, char_str, char_str_len);
 			 }
 			 p += split_length;
 		}	
 
-		if (p != (ZSTR_VAL(data) + ZSTR_LEN(data))) {
-			res = call_funcion_with_param4(p, (ZSTR_VAL(data) + ZSTR_LEN(data))-p, "openssl_public_encrypt", padding, public_key, &char_str, &char_str_len);
+		if (p != (data + data_len)) {
+			res = call_funcion_with_param4(p, data + data_len-p,  encrypt_name, padding, pKey, &char_str, &char_str_len);
 			if (res == SUCCESS) {
 				smart_str_appendl(&string, char_str, char_str_len);
 			}	
@@ -380,32 +343,12 @@ PHP_METHOD(rsautil, publicEncrypt)
 	} else {
 		RETURN_EMPTY_STRING();
 	}
-
 }
-/* }}} */
 
-
-PHP_METHOD(rsautil, privateDecrypt)
-{
-	zend_long padding = 1;
-	char *data;
-	size_t data_len;
+static void rsautil_decrypt(char *data, size_t data_len, zval *pKey, char* encrypt_name, INTERNAL_FUNCTION_PARAMETERS) {
 	zend_string *base64_str = NULL, *str = NULL;
 	size_t split_length = 128;
-	zval *private_key;
-
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_STRING(data, data_len)
-	ZEND_PARSE_PARAMETERS_END();
-		
-	private_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
-
-	if (!private_key || Z_TYPE_P(private_key) != IS_RESOURCE)
-	{
-		php_error_docref(NULL, E_WARNING, "Failed to private_key ");
-		RETURN_EMPTY_STRING();
-	}
-	// base64_str = zend_string_init(data, data_len, 0);
+	zend_long padding = 1;
 	base64_str = php_base64_decode((unsigned char *)data, data_len);
 	if (base64_str == NULL)
 	{
@@ -417,7 +360,7 @@ PHP_METHOD(rsautil, privateDecrypt)
 	size_t char_str_len;
 
 	if (ZSTR_LEN(base64_str) == split_length) {
-		res = call_funcion_with_param4(ZSTR_VAL(base64_str), ZSTR_LEN(base64_str), "openssl_private_decrypt", padding, private_key, &char_str, &char_str_len);
+		res = call_funcion_with_param4(ZSTR_VAL(base64_str), ZSTR_LEN(base64_str), encrypt_name, padding, pKey, &char_str, &char_str_len);
 		zend_string_release(base64_str);
 		if (res == SUCCESS) {
 			RETURN_STRINGL(char_str, char_str_len);
@@ -435,7 +378,7 @@ PHP_METHOD(rsautil, privateDecrypt)
 	
 		while (numelems-- > 0) {
 			memcpy(t, p, split_length);	
-			res = call_funcion_with_param4(t, split_length, "openssl_private_decrypt", padding, private_key, &char_str, &char_str_len);
+			res = call_funcion_with_param4(t, split_length, encrypt_name, padding, pKey, &char_str, &char_str_len);
 			if (res == SUCCESS) {
 				smart_str_appendl(&string, char_str, char_str_len);
 			}
@@ -458,6 +401,100 @@ PHP_METHOD(rsautil, privateDecrypt)
 	} else {
 		RETURN_EMPTY_STRING();
 	}
+}
+
+PHP_METHOD(rsautil, privateEncrypt)
+{
+	char *data;
+	size_t data_len;
+	zval *pKey;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(data, data_len)
+	ZEND_PARSE_PARAMETERS_END();
+
+	pKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
+
+	if (!pKey || Z_TYPE_P(pKey) != IS_RESOURCE)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to private_key ");
+		RETURN_EMPTY_STRING();
+	}
+	//"openssl_public_encrypt"
+	rsautil_encrypt(data, data_len, pKey, "openssl_private_encrypt", INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+PHP_METHOD(rsautil, publicDecrypt)
+{
+	char *data;
+	size_t data_len;
+	zval *pkey;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(data, data_len)
+	ZEND_PARSE_PARAMETERS_END();
+	pkey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
+	if (!pkey || Z_TYPE_P(pkey) != IS_RESOURCE)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to public_key ");
+		RETURN_EMPTY_STRING();
+	}
+	rsautil_decrypt(data, data_len, pkey, "openssl_public_decrypt", INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+PHP_METHOD(rsautil, encrypt)
+{
+	
+}
+
+PHP_METHOD(rsautil, decrypt)
+{
+	
+}
+/* {{{ void rsautil::publicEncrypt($encrypted)
+ */
+
+PHP_METHOD(rsautil, publicEncrypt)
+{
+	char *data;
+	size_t data_len;
+	zval *pKey;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(data, data_len)
+	ZEND_PARSE_PARAMETERS_END();
+
+	pKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
+	if (!pKey || Z_TYPE_P(pKey) != IS_RESOURCE)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to public_key ");
+		RETURN_FALSE;
+	}
+
+	rsautil_encrypt(data, data_len, pKey, "openssl_public_encrypt", INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+/* }}} */
+
+
+
+PHP_METHOD(rsautil, privateDecrypt)
+{
+	char *data;
+	size_t data_len;
+	zval *pKey;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(data, data_len)
+	ZEND_PARSE_PARAMETERS_END();
+		
+	pKey = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
+
+	if (!pKey || Z_TYPE_P(pKey) != IS_RESOURCE)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to private_key ");
+		RETURN_EMPTY_STRING();
+	}
+	rsautil_decrypt(data, data_len, pKey, "openssl_private_decrypt", INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }
 
 
@@ -616,9 +653,9 @@ PHP_MINIT_FUNCTION(rsautil) /* {{{ */
 	rsautil_ce_ptr = zend_register_internal_class(&rsautil_ce);
 	
 	//添加属性
-	zend_declare_property_null(rsautil_ce_ptr, ZEND_STRL(PROPERTY_PUBLICKEY), ZEND_ACC_PUBLIC);
+	zend_declare_property_null(rsautil_ce_ptr, ZEND_STRL(PROPERTY_PUBLICKEY),  ZEND_ACC_PUBLIC);
 	zend_declare_property_null(rsautil_ce_ptr, ZEND_STRL(PROPERTY_PRIVATEKEY), ZEND_ACC_PUBLIC);
-	zend_declare_property_null(rsautil_ce_ptr, ZEND_STRL(PROPERTY_PKCS12), ZEND_ACC_PUBLIC);
+	zend_declare_property_null(rsautil_ce_ptr, ZEND_STRL(PROPERTY_PKCS12),     ZEND_ACC_PUBLIC);
 
 	return SUCCESS;
 }
