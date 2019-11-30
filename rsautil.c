@@ -56,11 +56,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_rsautil_set_pkcs12, 0, 0, 2)
 	ZEND_ARG_INFO(0, password)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_rsautil_split, 0, 0, 2)
-	ZEND_ARG_INFO(0, data)
-	ZEND_ARG_INFO(0, split_length)
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(arginfo_rsautil_set_private, 0, 0, 1)
 	ZEND_ARG_INFO(0, data)
 ZEND_END_ARG_INFO()
@@ -80,12 +75,6 @@ ZEND_BEGIN_ARG_INFO(arginfo_rsautil_void, 0)
 ZEND_END_ARG_INFO()
 /* }}} */
 
-PHP_METHOD(rsautil, split)
-{
-	
-}
-
-
 static void rsautil_get_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
 {
 	zval *res;
@@ -95,8 +84,12 @@ static void rsautil_get_property(char *name, size_t name_len, INTERNAL_FUNCTION_
 		return;
 	}
 	res = zend_read_property(rsautil_ce_ptr, getThis(), name, name_len, 1, NULL);
-	Z_TRY_ADDREF_P(res);
-	RETURN_ZVAL(res, 0, 0);
+	if (res) {
+		Z_TRY_ADDREF_P(res);
+		RETURN_RES(Z_RES_P(res));
+	} else {
+		RETURN_FALSE;
+	}	
 }
 
 static void rsautil_set_property(char *name, size_t name_len, INTERNAL_FUNCTION_PARAMETERS)
@@ -363,9 +356,15 @@ static void rsautil_decrypt(char *data, size_t data_len, zval *pKey, char* encry
 		res = call_funcion_with_param4(ZSTR_VAL(base64_str), ZSTR_LEN(base64_str), encrypt_name, padding, pKey, &char_str, &char_str_len);
 		zend_string_release(base64_str);
 		if (res == SUCCESS) {
-			RETURN_STRINGL(char_str, char_str_len);
+			str = zend_string_init(char_str, char_str_len, 0);
+			if (char_str) {
+				efree(char_str);
+			}
+			RETURN_STR(str);
 		} else {
-			// zend_string_release(str);
+			if (char_str) {
+				efree(char_str);
+			}
 			RETURN_EMPTY_STRING();
 		}
 	} else if (ZSTR_LEN(base64_str) > split_length) {
@@ -593,7 +592,42 @@ PHP_METHOD(rsautil, verify)
 	zend_string_release(base64_str);
 	RETURN_LONG(Z_LVAL(retval));
 }
+/* }}} */
 
+static void rsautil_pkey_free(INTERNAL_FUNCTION_PARAMETERS)
+{
+	zval * public_key, *private_key;
+	public_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PUBLICKEY), 1 , NULL);
+	if (!public_key)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to publicKey ");
+		RETURN_FALSE;
+	}
+	
+	private_key = zend_read_property(rsautil_ce_ptr, getThis(), ZEND_STRL(PROPERTY_PRIVATEKEY), 1 , NULL);
+	if (!private_key || Z_TYPE_P(private_key) != IS_RESOURCE)
+	{
+		php_error_docref(NULL, E_WARNING, "Failed to private_key ");
+		RETURN_FALSE;
+	}
+
+	zend_list_close(Z_RES_P(public_key));
+	zend_list_close(Z_RES_P(private_key));
+	Z_SET_REFCOUNT_P(public_key, 0);
+	Z_SET_REFCOUNT_P(private_key, 0);
+}
+
+/* {{{ */
+PHP_METHOD(rsautil, __destruct)
+{
+	rsautil_pkey_free(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+/* }}} */
+
+/* {{{ */
+PHP_METHOD(rsautil, __construct)
+{
+}
 /* }}} */
 
 /* {{{ rsautil_deps[] 扩展依赖
@@ -629,6 +663,9 @@ static const zend_function_entry rsautil_methods[] = {
 	PHP_ME(rsautil, decrypt,        arginfo_rsautil_decrypt,     ZEND_ACC_PUBLIC)
 	PHP_ME(rsautil, sign,           arginfo_rsautil_sign,        ZEND_ACC_PUBLIC)
 	PHP_ME(rsautil, verify,         arginfo_rsautil_verify,      ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, __construct,    arginfo_rsautil_void,        ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, __destruct,     arginfo_rsautil_void,        ZEND_ACC_PUBLIC)
+
 	PHP_FE_END
 };
 /* }}} */
