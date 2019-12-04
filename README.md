@@ -1,9 +1,11 @@
 # php-ext-RSAUtil
+
 php扩展RSAUtil
 标准RSA算法,支持超过128字节长度的数据
 
 
 ## linux mac 环境下编译安装
+
 ```shell
 phpize
 ./configure --enable-rsautil
@@ -12,7 +14,9 @@ make install
 ```
 
 支持方法
+
 ```php
+
 RSAUtil
 RSAUtil::setPublicKey(string $pub) : bool
 RSAUtil::setP12(string $p12, string $pass) : bool
@@ -27,5 +31,5 @@ RSAUtil::sign(string $data,  mixed $pri, mixed $signature_alg) : string
 
 //如果签名正确返回 1, 签名错误返回 0, 内部发生错误则返回-1.
 RSAUtil::verify(string $data, string $signature, mixed $pub, mixed $signature_alg) :int
-
+RSAUtil::getErrors():array
 ```
