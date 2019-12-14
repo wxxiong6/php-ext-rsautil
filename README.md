@@ -1,6 +1,6 @@
 # php-ext-RSAUtil
 
-[![Build Status](https://travis-ci.org/wxxiong6/php-ext-arraylist.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-arraylist)
+[![Build Status](https://travis-ci.org/wxxiong6/php-ext-rsautil.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-rsautil.svg?branch=master)
 
 标准RSA算法，使用填充方式，能够处理超过128字节长度的数据。
 
