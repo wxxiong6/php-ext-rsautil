@@ -1,10 +1,13 @@
 # php-ext-RSAUtil
 
-php扩展RSAUtil
-标准RSA算法,支持超过128字节长度的数据
+[![Build Status](https://travis-ci.org/wxxiong6/php-ext-rsautil.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-rsautil.svg?branch=master)
 
+标准RSA算法，使用填充方式，能够处理超过128字节长度的数据。
 
-## linux mac 环境下编译安装
+## Requirement
+php7.0 +
+
+## Install
 
 ```shell
 phpize
@@ -12,9 +15,7 @@ phpize
 make 
 make install
 ```
-
-支持方法
-
+## Document
 ```php
 
 RSAUtil
