@@ -4,13 +4,7 @@ Check for RSAUtil load
 <?php if (!extension_loaded("rsautil")) print "skip"; ?>
 --FILE--
 <?php 
-$rsa = new RSAUtil();
-print_r($rsa);
+echo "rsautil extension is available";
 ?>
 --EXPECT--
-RSAUtil Object
-(
-    [publicKey] => 
-    [privateKey] => 
-    [pkcs12] => 
-)
+rsautil extension is available
