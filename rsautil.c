@@ -288,7 +288,7 @@ static void rsautil_encrypt(char *data, size_t data_len, zval *pKey, char* encry
 	zend_string *str = NULL;
 	zend_long padding = 1;
 	int res;
-	char *char_str = emalloc(split_length);
+	char *char_str = emalloc(RSA_DERYPT_LEN);
 	size_t char_str_len;
 
 	if (data_len <= split_length) {
@@ -328,6 +328,7 @@ static void rsautil_encrypt(char *data, size_t data_len, zval *pKey, char* encry
 		if (t) {
 			efree(t);
 		}
+		
 		if (char_str) {
 			efree(char_str);
 		}
@@ -362,8 +363,13 @@ static void rsautil_decrypt(char *data, size_t data_len, zval *pKey, char* encry
 	if (ZSTR_LEN(base64_str) == split_length) {
 		res = call_funcion_with_4_param(ZSTR_VAL(base64_str), ZSTR_LEN(base64_str), encrypt_name, padding, pKey, &char_str, &char_str_len);
 		zend_string_release(base64_str);
+
 		if (res == SUCCESS) {
-			RETURN_STRINGL(char_str, char_str_len);
+			zend_string *str = zend_string_init(char_str, char_str_len, 0);
+			if (char_str) {
+				efree(char_str);
+			}
+			RETURN_STR(str);
 		} else {
 			// zend_string_release(str);
 			RETURN_EMPTY_STRING();
@@ -519,7 +525,7 @@ PHP_METHOD(rsautil, sign)
 		php_error_docref(NULL, E_WARNING, "Failed to private_key ");
 		RETURN_FALSE;
 	}
-	// openssl_sign($data, $signature, $key, $algorithm);
+
 	zval params[4];
 	uint32_t param_cnt = 4;
 	ZVAL_STRING(&params[0],		data);
@@ -533,15 +539,15 @@ PHP_METHOD(rsautil, sign)
 	{
 		 RETURN_FALSE;
 	}
-	zval * result = Z_REFVAL_P(&params[1]);
-	ZVAL_UNREF(&params[1]);
+
+	zend_string *str = php_base64_encode((unsigned char *)Z_STRVAL_P(Z_REFVAL_P(&params[1])), Z_STRLEN_P(Z_REFVAL_P(&params[1])));
 	zval_dtor(&params[0]);
 	zval_dtor(&params[1]);
 	zval_dtor(&params[2]);
 	zval_dtor(&function_name);
-	RETURN_NEW_STR(php_base64_encode((unsigned char *)Z_STRVAL_P(result), Z_STRLEN_P(result)));
+	RETURN_STR(str);
 }
-
+ 
 
 
 /* {{{ rsautil::verify($msg, $sign, $method = ALGO_MD5)
@@ -709,7 +715,7 @@ static const zend_function_entry rsautil_methods[] = {
 	PHP_ME(rsautil, verify,         arginfo_rsautil_verify,      ZEND_ACC_PUBLIC)
 	PHP_ME(rsautil, __construct,    arginfo_rsautil_void,        ZEND_ACC_PUBLIC)
 	PHP_ME(rsautil, __destruct,     arginfo_rsautil_void,        ZEND_ACC_PUBLIC)
-	PHP_ME(rsautil, getErrors,       arginfo_rsautil_void,        ZEND_ACC_PUBLIC)
+	PHP_ME(rsautil, getErrors,      arginfo_rsautil_void,        ZEND_ACC_PUBLIC)
 	PHP_FE_END
 };
 /* }}} */
