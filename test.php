@@ -11,7 +11,7 @@ var_dump("getPublicKey",         $rsa->getPublicKey());
 debug_zval_dump("getPrivateKey", $rsa->getPrivateKey());
 
 echo "------------------", "私钥加密公钥解密", "---------------------", " \n";
-$encryptedTemp = $rsa->publicEncrypt("公钥加密私钥解密吼吼！");
+$encryptedTemp = $rsa->publicEncrypt("公钥加密私钥超过128个字节，公钥加密私钥超过128个字节，公钥加密私钥超过128个字节，公钥加密私钥超过128个字节，公钥加密私钥超过128个字节，公钥加密私钥超过128个字节，");
 var_dump("encrypted", $encryptedTemp);
 $decryptedTemp = $rsa->privateDecrypt($encryptedTemp);
 var_dump("decrypted", $decryptedTemp);
